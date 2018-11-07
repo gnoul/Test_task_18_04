@@ -1,0 +1,36 @@
+version: '2'
+services:
+  postgresql:
+    image: postgres:10
+    hostname: db
+    env_file: ./env
+    volumes:
+      - ./dockerfiles/pgdata:/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+
+  service1:
+    hostname: service1
+    env_file: ./env
+    build: ./src
+    working_dir: /opt/service1
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./src:/opt/service1
+#      - ./dockerfiles/static_root:/opt/service1/static_root
+#      - ./dockerfiles/media_root:/opt/service1/media_root
+    links:
+      - "postgresql:db"
+      - "elastic"
+    ports:
+      - "8008:8000"
+
+  elastic:
+    image: elasticsearch:6.4.2
+    hostname: elastic
+    env_file: ./env
+    volumes:
+      - ./dockerfiles/elastic_data:/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
