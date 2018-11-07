@@ -51,22 +51,37 @@ class ContactView(FormView):
             else:
                 self.agg_data[field] = {k: v for k, v in value.items() if k in ['min', 'max', 'count']}
 
+    def get_initial(self):
+        initial = super(ContactView, self).get_initial()
+        if self.request.method == 'GET' and self.agg_data:
+            for k, v in self.agg_data.items():
+                if 'min' in v:
+                    fieldname = '{}_from'.format(k)
+                    initial[fieldname] = v['min']
+                if 'max' in v:
+                    fieldname = '{}_to'.format(k)
+                    initial[fieldname] = v['max']
+        return initial
+
     def form_valid(self, form):
-        # response = super().form_valid(form)
         comparsion_ops = {'from': 'gte', 'to': 'lte'}  # Convert form field names to ES operators
         terms = {}
         ranges = defaultdict(dict)
-        for field in form.cleaned_data:
-            if field:
-                if '_from' in field or '_to' in field:  # range fields
-                    *field_part, postfix = field.split('_')
-                    field_name = '_'.join(field_part)
-                    ranges[field_name][comparsion_ops[postfix]] = form.cleaned_data[field]
-                elif field == 'rooms_number':
-                    field_choices = dict(form.fields['rooms_number'].choices)
-                    terms[field] = str(field_choices[int(form.cleaned_data[field][0])])
-                elif field in ['mortgage', 'mortgage_mil', 'balcony']:  # Boolean fields
-                    terms[field] = form.cleaned_data[field]
+        for field, data in form.cleaned_data.items():
+            if data == '':
+                continue
+            if '_from' in field or '_to' in field:  # range fields
+                *field_part, postfix = field.split('_')
+                field_name = '_'.join(field_part)
+                ranges[field_name][comparsion_ops[postfix]] = data
+            elif field == 'rooms_number':  # Choices
+                field_choices = dict(form.fields[field].choices)
+                terms[field] = str(field_choices[int(data[0])])  # TODO make multiselect
+            elif field in ['mortgage', 'mortgage_mil', 'balcony']:  # Boolean fields
+                if isinstance(data, bool):
+                    terms[field] = data
+                if isinstance(data, str) and data.isdigit():
+                    terms[field] = bool(int(data))
         must = []
         for term, value in terms.items():
             must.append({"term": {term: value}})
